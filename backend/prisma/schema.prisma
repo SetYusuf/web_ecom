@@ -1,0 +1,326 @@
+// This is your Prisma schema file
+// E-commerce database schema for WebCloth
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL")
+}
+
+// User models
+model User {
+  id               String    @id @default(auto()) @map("_id") @db.ObjectId
+  email            String    @unique
+  password         String
+  firstName        String?
+  lastName         String?
+  phone            String?
+  role             String    @default("CUSTOMER") // CUSTOMER, ADMIN, SUPER_ADMIN
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  resetToken       String?
+  resetTokenExpiry DateTime?
+
+  addresses  Address[]
+  orders     Order[]
+  cart       Cart?
+  wishlist   Wishlist?
+  reviews    Review[]
+  newsletter Newsletter?
+  sessions   Session[]
+}
+
+model Session {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Address {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @db.ObjectId
+  firstName String
+  lastName  String
+  street    String
+  apartment String?
+  city      String
+  state     String?
+  country   String
+  zipCode   String
+  phone     String
+  isDefault Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders    Order[]
+}
+
+// Product models
+model Category {
+  id          String    @id @default(auto()) @map("_id") @db.ObjectId
+  name        String
+  slug        String    @unique
+  description String?
+  image       String?
+  parentId    String?   @db.ObjectId
+  parent      Category? @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  children    Category[] @relation("CategoryHierarchy")
+  products    Product[]
+  attributes  CategoryAttribute[]
+  ageGroup    String?   // Adult, Kids, Baby (for Kids category)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model CategoryAttribute {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  categoryId String   @db.ObjectId
+  name       String   // e.g., "Size", "Color", "Material"
+  values     String   // JSON array of values
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model Product {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  name              String
+  slug              String   @unique
+  description       String?
+  shortDescription  String?
+  price             Float
+  salePrice         Float?
+  sku               String   @unique
+  categoryId        String   @db.ObjectId
+  category          Category @relation(fields: [categoryId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  brand             String?
+  images            ProductImage[]
+  variants          ProductVariant[]
+  stock             Int      @default(0)
+  isActive          Boolean  @default(true)
+  isFeatured        Boolean  @default(false)
+  tags              String?  // JSON array of tags
+  materials         String?  // JSON array of materials
+  careInstructions  String?
+  fitType           String?  // Regular, Slim, Loose, etc.
+  occasion          String?  // Casual, Formal, Sports, etc.
+  ageGroup          String?  // Adult, Kids, Baby (for Kids category)
+
+  // SEO
+  metaTitle         String?
+  metaDescription   String?
+  metaKeywords      String?
+
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  reviewAverage     Float?   // Cached average rating
+  reviewCount       Int      @default(0)
+  reviews           Review[]
+  cartItems         CartItem[]
+  orderItems        OrderItem[]
+  wishlistItems     WishlistItem[]
+}
+
+model ProductImage {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  productId String   @db.ObjectId
+  url       String
+  altText   String?
+  position  Int      @default(0)
+  isPrimary Boolean  @default(false)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt DateTime @default(now())
+}
+
+model ProductVariant {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  productId String   @db.ObjectId
+  sku       String   @unique
+  size      String
+  color     String
+  price     Float?   // Override price for this variant
+  stock     Int      @default(0)
+  images    String?  // JSON array of image URLs for this variant
+  product   Product  @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Shopping Cart
+model Cart {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @unique @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model CartItem {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  cartId    String   @db.ObjectId
+  productId String   @db.ObjectId
+  variantId String?
+  quantity  Int      @default(1)
+  cart      Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Wishlist
+model Wishlist {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId    String   @unique @db.ObjectId
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     WishlistItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WishlistItem {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  wishlistId String   @db.ObjectId
+  productId  String   @db.ObjectId
+  wishlist   Wishlist @relation(fields: [wishlistId], references: [id], onDelete: Cascade)
+  product    Product  @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt  DateTime @default(now())
+}
+
+// Orders
+model Order {
+  id                  String   @id @default(auto()) @map("_id") @db.ObjectId
+  orderNumber         String   @unique
+  userId              String   @db.ObjectId
+  user                User     @relation(fields: [userId], references: [id])
+  status              String   @default("PENDING") // PENDING, CONFIRMED, PROCESSING, SHIPPED, DELIVERED, CANCELLED, REFUNDED
+  paymentStatus       String   @default("PENDING") // PENDING, PAID, FAILED, REFUNDED, PARTIALLY_REFUNDED
+
+  // Address snapshot at time of order
+  shippingAddressId  String?   @db.ObjectId
+  shippingAddress    Address?  @relation(fields: [shippingAddressId], references: [id])
+  billingAddress     String?   // JSON string
+
+  items              OrderItem[]
+  subtotal           Float
+  shippingCost       Float     @default(0)
+  tax                Float     @default(0)
+  discount           Float     @default(0)
+  total              Float
+
+  paymentMethod      String?
+  paymentIntentId    String?
+  shippingMethod     String?
+  trackingNumber     String?
+
+  notes              String?
+
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  shippedAt          DateTime?
+  deliveredAt        DateTime?
+}
+
+model OrderItem {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  orderId   String   @db.ObjectId
+  productId String   @db.ObjectId
+  variantId String?
+  quantity  Int
+  price     Float    // Price at time of purchase
+  size      String?
+  color     String?
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product   Product  @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+// Reviews
+model Review {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId     String   @db.ObjectId
+  productId  String   @db.ObjectId
+  rating     Int      // 1-5
+  title      String?
+  comment    String?
+  isVerified Boolean  @default(false) // Verified purchase
+  isApproved Boolean  @default(false)
+  user       User     @relation(fields: [userId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+}
+
+// Promotions
+model Coupon {
+  id                     String   @id @default(auto()) @map("_id") @db.ObjectId
+  code                   String   @unique
+  description            String?
+  type                   String   // PERCENTAGE, FIXED, FREE_SHIPPING
+  value                  Float
+  minOrderAmount         Float?
+  maxDiscount            Float?
+  usageLimit             Int?
+  usedCount              Int      @default(0)
+  startsAt               DateTime?
+  expiresAt              DateTime?
+  isActive               Boolean  @default(true)
+  applicableCategories   String?  // JSON array of category IDs
+  applicableProducts     String?  // JSON array of product IDs
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+}
+
+// Newsletter
+model Newsletter {
+  id       String   @id @default(auto()) @map("_id") @db.ObjectId
+  email    String   @unique
+  userId   String?  @unique @db.ObjectId
+  user     User?    @relation(fields: [userId], references: [id])
+  isActive Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+// Size Guide
+model SizeGuide {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  category     String   // Men, Women, Kids
+  type         String   // Tops, Bottoms, Dresses, etc.
+  measurements String   // JSON string with size measurements
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
+
+// CMS Pages
+model Page {
+  id              String   @id @default(auto()) @map("_id") @db.ObjectId
+  title           String
+  slug            String   @unique
+  content         String   // HTML content
+  excerpt         String?
+  isActive        Boolean  @default(true)
+  metaTitle       String?
+  metaDescription String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+// Banners
+model Banner {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  image     String
+  link      String?
+  position  Int      @default(0)
+  placement String   // homepage_hero, category_banner, etc.
+  isActive  Boolean  @default(true)
+  startsAt  DateTime?
+  endsAt    DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
